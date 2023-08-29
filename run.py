@@ -3,28 +3,23 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import os
 import os.path as osp
-from collections import defaultdict
-from typing import Dict, Optional
-
+from typing import Dict
 import gym.spaces as spaces
-import hydra
-import numpy as np
+import gym
 import torch
-import torch.nn as nn
+import mediapy as media
 from hydra.utils import instantiate as hydra_instantiate
-from omegaconf import DictConfig, OmegaConf
-from rl_utils.common import (Evaluator, compress_dict, get_size_for_space,
+from omegaconf import DictConfig
+from rl_utils.common import (Evaluator, get_size_for_space,
                              set_seed)
 from rl_utils.envs import create_vectorized_envs
 from rl_utils.logging import Logger
 
-from imitation_learning.policy_opt.policy import Policy
-from imitation_learning.policy_opt.ppo import PPO
-from imitation_learning.policy_opt.storage import RolloutStorage
+from bcirl.imitation_learning.policy_opt.policy import Policy
+from bcirl.imitation_learning.policy_opt.ppo import PPO
+from bcirl.imitation_learning.policy_opt.storage import RolloutStorage
 import yaml 
-
 #register environment in gym
 from gymnasium.envs.registration import register
 
@@ -37,10 +32,11 @@ def main(cfg) -> Dict[str, float]:
         for k, v in cfg.env.env_settings.items()
     }
 
-
-    register(
-        id='snake-v0',
-        entry_point='environment.snake_env:SnakeEnv',    )
+    gym.register(
+        id='snake',
+        entry_point='environment.snake_env:SnakeEnv',
+    )
+    
     envs = create_vectorized_envs(
         cfg.env.env_name,
         cfg.num_envs,
@@ -48,6 +44,7 @@ def main(cfg) -> Dict[str, float]:
         device=device,
         **set_env_settings,
     )
+
 
     steps_per_update = cfg.num_steps * cfg.num_envs
     num_updates = int(cfg.num_env_steps) // steps_per_update
@@ -63,15 +60,7 @@ def main(cfg) -> Dict[str, float]:
     policy: Policy = hydra_instantiate(cfg.policy)
     policy = policy.to(device)
     updater = hydra_instantiate(cfg.policy_updater, policy=policy, device=device)
-    evaluator: Evaluator = hydra_instantiate(
-        cfg.evaluator,
-        envs=envs,
-        vid_dir=logger.vid_path,
-        updater=updater,
-        logger=logger,
-        device=device,
-    )
-
+    
     start_update = 0
     if cfg.load_checkpoint is not None:
         ckpt = torch.load(cfg.load_checkpoint)
@@ -83,18 +72,9 @@ def main(cfg) -> Dict[str, float]:
 
     eval_info = {"run_name": logger.run_name}
 
-    if cfg.only_eval:
-        eval_result = evaluator.evaluate(policy, cfg.num_eval_episodes, 0)
-        logger.collect_infos(eval_result, "eval.", no_rolling_window=True)
-        eval_info.update(eval_result)
-        logger.interval_log(0, 0)
-        logger.close()
-
-        return eval_info
 
     obs = envs.reset()
     storage.init_storage(obs)
-
     for update_i in range(start_update, num_updates):
         is_last_update = update_i == num_updates - 1
         for step_idx in range(cfg.num_steps):
@@ -111,17 +91,24 @@ def main(cfg) -> Dict[str, float]:
         updater.update(policy, storage, logger, envs=envs)
 
         storage.after_update()
-
-        if cfg.eval_interval != -1 and (
-            update_i % cfg.eval_interval == 0 or is_last_update
-        ):
-            with torch.no_grad():
-                eval_result = evaluator.evaluate(
-                    policy, cfg.num_eval_episodes, update_i
-                )
-            logger.collect_infos(eval_result, "eval.", no_rolling_window=True)
-            eval_info.update(eval_result)
-
+        
+        if True:
+            
+            # do a basic evaluation and render 
+            snakie = gym.make('snakie-v0')
+            snakie.reset()
+            frames = []
+            for i in range(100):
+                snakie.render()
+                action = policy.act(snakie.get_obs(), snakie.get_hidden(), snakie.get_mask())["actions"]
+                obs, reward, done, info = snakie.step(action)
+                frames.append(snakie.render(mode='rgb_array'))
+                if done:
+                    break
+            snakie.close()
+            media.write_video('snakie.mp4', frames, fps=10)
+            
+            
         if cfg.log_interval != -1 and (
             update_i % cfg.log_interval == 0 or is_last_update
         ):

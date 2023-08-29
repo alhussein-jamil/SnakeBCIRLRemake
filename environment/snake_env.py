@@ -2,18 +2,18 @@ from .snake import Snake
 from .apple import Apple
 import pygame
 import random 
-import gymnasium as gym
+# import gymnasium as gym
 import numpy as np
 import torch
 
 import gymnasium.utils as utils 
 
 from gymnasium.spaces import Discrete, Box
-
+import gym
 
 class SnakeEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array']}
-    def __init__(self,config, **kwargs):
+    def __init__(self, config = {}, **kwargs):
         utils.EzPickle.__init__(self, config, **kwargs)
         self.screen_width = config.get('screen_width', 300)
         self.screen_height = config.get('screen_height', 300)
@@ -26,10 +26,9 @@ class SnakeEnv(gym.Env):
             pygame.init()
             self.screen =  pygame.display.set_mode((self.screen_width, self.screen_height))
 
-        self.observation_space = Box(low = 0.0 , high = 1.0 , shape =  ((1+ self.screen_width* self.screen_height // (self.block_size**2)  )*2,) , dtype = np.float32)
-        
-        self.action_space = Discrete(4)
-
+        self.observation_space = gym.spaces.Box(low = 0.0 , high = 1.0 , shape =  ((1+ self.screen_width* self.screen_height // (self.block_size**2)  )*2,) , dtype = np.float32)
+        self.action_space = gym.spaces.Discrete(4)
+        self.seed = config.get('seed', lambda x: random.randint(0, 2**32 - 1))
     def normalized_distance(self, a, b):   
         disx = abs(a[0] - b[0])/self.screen_width
         disy = abs(a[1] - b[1])/self.screen_height

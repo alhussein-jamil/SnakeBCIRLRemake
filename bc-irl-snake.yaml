@@ -1,35 +1,36 @@
 env_settings: {}
-obs_shape: ???
-action_dim: ???
-total_num_updates: ???
-action_is_discrete: ???
-num_steps: 50
-num_envs: 256
+obs_shape:
+    - 2
+action_dim: 2
+total_num_updates: 3906
+action_is_discrete: false
+num_steps: 5
+num_envs: 5
 device: cpu
 only_eval: false
-seed: 3
+seed: 31
 num_eval_episodes: 100
-num_env_steps: 50000000
+num_env_steps: 5000000
 recurrent_hidden_state_size: 128
-gamma: 0.8
+gamma: 0.99
 log_interval: 10
-eval_interval: 500
+eval_interval: 1000000000
 save_interval: 10000000000
 load_checkpoint: null
 load_policy: true
 resume_training: false
 policy:
     _target_: imitation_learning.policy_opt.policy.Policy
-    hidden_size: 512
+    hidden_size: 128
     recurrent_hidden_size: 128
     is_recurrent: false
-    obs_shape: ${obs_shape}
-    action_dim: ${action_dim}
-    action_is_discrete: ${action_is_discrete}
+    obs_shape:
+        - 2
+    action_dim: 2
+    action_is_discrete: false
     std_init: 0
-    num_envs: ${num_envs}
 policy_updater:
-    _target_: imitation_learning.bcirl.BCIRL
+    _target_: imitation_learning.bc_irl.updater.BCIRL
     _recursive_: false
     use_clipped_value_loss: true
     clip_param: 0.2
@@ -41,6 +42,7 @@ policy_updater:
     num_envs: ${num_envs}
     num_steps: ${num_steps}
     gae_lambda: 0.95
+    use_gae: true
     gamma: ${gamma}
     optimizer_params:
         _target_: torch.optim.Adam
@@ -50,19 +52,20 @@ policy_updater:
     norm_expert_actions: false
     n_inner_iters: 1
     reward_update_freq: 1
+    storage_cfg: ${storage}
     device: ${device}
     total_num_updates: ${total_num_updates}
-    use_lr_decay: false
+    use_lr_decay: true
     get_dataset_fn:
         _target_: imitation_learning.common.utils.get_transition_dataset
-        dataset_path: traj/pm_100.pth
+        dataset_path: expert_data.json
         env_name: ${env.env_name}
     policy_init_fn:
-        _target_: imitation_learning.bcirl.reg_init
+        _target_: imitation_learning.bc_irl.rewards.reg_init
         _recursive_: false
         policy_cfg: ${policy}
     reward:
-        _target_: imitation_learning.common.rewards.NeuralReward
+        _target_: imitation_learning.common.net.NeuralReward
         obs_shape: ${obs_shape}
         action_dim: ${action_dim}
         reward_hidden_dim: 128
@@ -71,7 +74,7 @@ policy_updater:
         include_tanh: false
         n_hidden_layers: 2
     inner_updater:
-        _target_: imitation_learning.policy_opt.ppo.PPO
+        _target_: imitation_learning.bc_irl.differentiable_ppo.DifferentiablePPO
         _recursive_: false
         use_clipped_value_loss: true
         max_grad_norm: -1
@@ -80,19 +83,28 @@ policy_updater:
         entropy_coef: 0.001
         num_epochs: 2
         num_mini_batch: 4
-        num_envs: ${num_envs}
-        num_steps: ${num_steps}
         gae_lambda: 0.95
+        use_gae: true
         gamma: 0.99
     inner_opt:
         _target_: torch.optim.Adam
         lr: 0.0001
     reward_opt:
         _target_: torch.optim.Adam
-        lr: 0.001
+        lr: 0.0001
     irl_loss:
         _target_: torch.nn.MSELoss
         reduction: mean
+storage:
+    _target_: imitation_learning.policy_opt.storage.RolloutStorage
+    num_steps: 5
+    num_processes: 256
+    recurrent_hidden_state_size: 128
+    obs_shape:
+        - 2
+    action_dim: 2
+    action_is_discrete: false
+    fetch_final_obs: true
 logger:
     _target_: rl_utils.logging.Logger
     _recursive_: false
@@ -104,19 +116,11 @@ logger:
     smooth_len: 10
     group_name: ""
 env:
-    env_name: snake-v0
+    env_name: snake
     env_settings:
         params:
-            _target_: environment.snake_env.SnakeEnv
-            config:
-                render_mode : rgb_array
-                screen_width : 200
-                screen_height : 200
-                block_size : 20
-                max_hunger_coef : 1
-                max_steps_coef: 30
-                num_exp : 20
-
+            config: 
+                nothing: 2
         set_eval: false
 evaluator:
     _target_: imitation_learning.common.pointmass_utils.PointMassVisualizer
@@ -136,5 +140,8 @@ eval_args:
     policy_updater:
         reward_update_freq: -1
         n_inner_iters: 1
+        use_lr_decay: true
+        inner_opt:
+            lr: 0.0001
     load_policy: false
     num_env_steps: 5000000
