@@ -1,11 +1,11 @@
 env_settings: {}
 obs_shape:
-    - 2
-action_dim: 2
+    - 452
+action_dim: 4
 total_num_updates: 3906
 action_is_discrete: false
-num_steps: 5
-num_envs: 5
+num_steps: 10
+num_envs: 16
 device: cpu
 only_eval: false
 seed: 31
@@ -25,8 +25,8 @@ policy:
     recurrent_hidden_size: 128
     is_recurrent: false
     obs_shape:
-        - 2
-    action_dim: 2
+        - 452
+    action_dim: 4
     action_is_discrete: false
     std_init: 0
 policy_updater:
@@ -58,7 +58,7 @@ policy_updater:
     use_lr_decay: true
     get_dataset_fn:
         _target_: imitation_learning.common.utils.get_transition_dataset
-        dataset_path: expert_data.json
+        dataset_path: expert_data.pth
         env_name: ${env.env_name}
     policy_init_fn:
         _target_: imitation_learning.bc_irl.rewards.reg_init
@@ -97,12 +97,12 @@ policy_updater:
         reduction: mean
 storage:
     _target_: imitation_learning.policy_opt.storage.RolloutStorage
-    num_steps: 5
-    num_processes: 256
+    num_steps: 10
+    num_processes: 16
     recurrent_hidden_state_size: 128
     obs_shape:
-        - 2
-    action_dim: 2
+        - 452
+    action_dim: 4
     action_is_discrete: false
     fetch_final_obs: true
 logger:
@@ -116,11 +116,11 @@ logger:
     smooth_len: 10
     group_name: ""
 env:
-    env_name: snake
+    env_name: snakie-v0
     env_settings:
         params:
             config: 
-                nothing: 2
+                num_exp: 20
         set_eval: false
 evaluator:
     _target_: imitation_learning.common.pointmass_utils.PointMassVisualizer

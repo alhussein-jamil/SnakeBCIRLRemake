@@ -1,9 +1,8 @@
 from environment.snake_env import SnakeEnv
-import mediapy as media
 import pygame
-import numpy as np
 import yaml 
 import heapq
+import torch
 
 def astar(start, goal, walls):
     """
@@ -75,12 +74,12 @@ env_config["render_mode"] = "human"
 snakie = SnakeEnv(env_config)
 frames = []
 
-expert_exp = {"reward": [], "action": [], "observation": [], "terminal": [], "next_observation": []}
+expert_exp = {"reward": [], "action": [], "observation": [], "terminal": [], "next_observation": [], "infos": []}
 snakie = SnakeEnv({**env_config})
 for experience in range(n_exp):
     #run forever and take actions from keyboard and collect data about the reward
 
-    expert_exp["observation"].append(snakie.reset()[0])
+    expert_exp["observation"].append(snakie.reset())
     done = False
     action = 0 
     while not done:
@@ -106,15 +105,19 @@ for experience in range(n_exp):
         else:
             action = 1
 
-        probs = [-1]*4
-        probs[action] = 0
+        probs = [-1.0]*4
+        probs[action] = 0.0
+        
         obs,reward,done,info= snakie.step(probs)
-   
+        probs = torch.tensor(probs)
         expert_exp["reward"].append(reward)
         expert_exp["action"].append(probs)
         expert_exp["observation"].append(obs)
         expert_exp["terminal"].append(done)
         expert_exp["next_observation"].append(obs)
+        expert_exp["infos"].append({"dist_to_goal": float(len(path)) / (snakie.screen_width + snakie.screen_height), "final_obs": obs if done else None})
+        if not done : 
+            expert_exp["infos"][-1].pop("final_obs")
         # print(expert_exp["action"][-1], expert_exp["reward"][-1], expert_exp["terminal"][-1])
         
         snakie.render("human")
@@ -122,18 +125,18 @@ for experience in range(n_exp):
     expert_exp["observation"] = expert_exp["observation"][:-1]
 pygame.quit()
 
-observations =[obs[0].tolist() if isinstance(obs, tuple) else obs.tolist() for obs in expert_exp["observation"]]
+observations = torch.stack(expert_exp["observation"])
 
-new_observation = [obs[0].tolist() if isinstance(obs, tuple) else obs.tolist() for obs in expert_exp["next_observation"]]
+new_observation = torch.stack(expert_exp["next_observation"])
 
-actions = expert_exp["action"]
+actions = torch.stack(expert_exp["action"])
 
-dones = expert_exp["terminal"]
+dones = torch.tensor(expert_exp["terminal"])
 
-rewards = expert_exp["reward"]
+rewards = torch.tensor(expert_exp["reward"])
 
-tobejsoned = {"observations": observations, "actions": actions, "terminals": dones, "next_observations": new_observation , "rewards": rewards}
+tobejsoned = {"observations": observations, "actions": actions, "terminals": dones, "next_observations": new_observation , "rewards": rewards, "infos": expert_exp["infos"]}
 
-import json
-with open("expert_data.json", "w") as f:
-    json.dump(tobejsoned, f)
+file_path = "expert_data.pth"
+
+torch.save(tobejsoned, file_path)

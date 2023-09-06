@@ -8,7 +8,6 @@ import torch
 
 import gymnasium.utils as utils 
 
-from gymnasium.spaces import Discrete, Box
 import gym
 
 class SnakeEnv(gym.Env):
@@ -69,7 +68,7 @@ class SnakeEnv(gym.Env):
         self.steps = 0
 
         # Return the initial observation of the game state
-        return self._get_obs(), {}
+        return self._get_obs()
 
 
     
@@ -162,6 +161,5 @@ class SnakeEnv(gym.Env):
         for i in range(len(self.snake.body)-1,-1,-1):
             obs[2*i+2] = self.snake.body[i][0]/ self.screen_width
             obs[2*i+3] = self.snake.body[i][1]/ self.screen_height
-            
         return obs[:self.observation_space.shape[0]]
     

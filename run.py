@@ -20,9 +20,8 @@ from bcirl.imitation_learning.policy_opt.policy import Policy
 from bcirl.imitation_learning.policy_opt.ppo import PPO
 from bcirl.imitation_learning.policy_opt.storage import RolloutStorage
 import yaml 
-#register environment in gym
-from gymnasium.envs.registration import register
 
+from environment.snake_env import SnakeEnv
 def main(cfg) -> Dict[str, float]:
     set_seed(cfg.seed)
     device = torch.device(cfg.device)
@@ -32,20 +31,14 @@ def main(cfg) -> Dict[str, float]:
         for k, v in cfg.env.env_settings.items()
     }
 
-    gym.register(
-        id='snake',
-        entry_point='environment.snake_env:SnakeEnv',
-    )
-    
     envs = create_vectorized_envs(
         cfg.env.env_name,
         cfg.num_envs,
+        create_env_fn = lambda seed : SnakeEnv(cfg.env.env_settings.params.config),
         seed=cfg.seed,
         device=device,
         **set_env_settings,
     )
-
-
     steps_per_update = cfg.num_steps * cfg.num_envs
     num_updates = int(cfg.num_env_steps) // steps_per_update
 
@@ -91,22 +84,7 @@ def main(cfg) -> Dict[str, float]:
         updater.update(policy, storage, logger, envs=envs)
 
         storage.after_update()
-        
-        if True:
-            
-            # do a basic evaluation and render 
-            snakie = gym.make('snakie-v0')
-            snakie.reset()
-            frames = []
-            for i in range(100):
-                snakie.render()
-                action = policy.act(snakie.get_obs(), snakie.get_hidden(), snakie.get_mask())["actions"]
-                obs, reward, done, info = snakie.step(action)
-                frames.append(snakie.render(mode='rgb_array'))
-                if done:
-                    break
-            snakie.close()
-            media.write_video('snakie.mp4', frames, fps=10)
+
             
             
         if cfg.log_interval != -1 and (
